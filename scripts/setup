@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Install development requirements
+python3 -m pip install --requirement requirements-dev.txt
+
+# Setup git commit hooks
+pre-commit install

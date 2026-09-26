@@ -1,0 +1,353 @@
+"""Switch platform for the Adaptive Cover integration."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_ON
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import (
+    CONF_CLIMATE_MODE,
+    CONF_ENTITIES,
+    CONF_IRRADIANCE_ENTITY,
+    CONF_IS_HUB,
+    CONF_LUX_ENTITY,
+    CONF_OUTSIDETEMP_ENTITY,
+    CONF_PRESENCE_ENTITY,
+    CONF_SENSOR_TYPE,
+    CONF_WEATHER_ENTITY,
+    DOMAIN,
+    LOGGER,
+)
+from .coordinator import AdaptiveDataUpdateCoordinator
+from .helpers import iter_regular_coordinators
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Register switches.
+
+    Hub entries expose:
+      - ``AdaptiveControlAllSwitch`` ("Les volets") — Alexa adaptive control.
+      - ``AdaptiveSecurityAllSwitch`` ("Sécurité volets") — security mode across
+        all entries that have a presence entity configured.
+
+    Regular entries expose the usual per-entry switches, plus
+    ``AdaptiveCoverSwitch("Security Mode")`` when a presence entity is configured.
+    """
+    if config_entry.data.get(CONF_IS_HUB):
+        async_add_entities([
+            AdaptiveControlAllSwitch(hass, config_entry),
+            AdaptiveSecurityAllSwitch(hass, config_entry),
+        ])
+        return
+
+    coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
+        config_entry.entry_id
+    ]
+
+    manual_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Manual Override",
+        True,
+        "manual_toggle",
+        coordinator,
+    )
+    control_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Toggle Control",
+        True,
+        "control_toggle",
+        coordinator,
+    )
+    climate_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Climate Mode",
+        True,
+        "switch_mode",
+        coordinator,
+    )
+    temp_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Outside Temperature",
+        False,
+        "temp_toggle",
+        coordinator,
+    )
+    lux_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Lux",
+        True,
+        "lux_toggle",
+        coordinator,
+    )
+    irradiance_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Irradiance",
+        True,
+        "irradiance_toggle",
+        coordinator,
+    )
+    security_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Security Mode",
+        False,  # OFF by default — user must explicitly enable
+        "security_toggle",
+        coordinator,
+    )
+
+    climate_mode = config_entry.options.get(CONF_CLIMATE_MODE)
+    weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
+    sensor_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
+    lux_entity = config_entry.options.get(CONF_LUX_ENTITY)
+    irradiance_entity = config_entry.options.get(CONF_IRRADIANCE_ENTITY)
+    presence_entity = config_entry.options.get(CONF_PRESENCE_ENTITY)
+    switches = []
+
+    if len(config_entry.options.get(CONF_ENTITIES)) >= 1:
+        switches = [control_switch, manual_switch]
+
+    if climate_mode:
+        switches.append(climate_switch)
+        if weather_entity or sensor_entity:
+            switches.append(temp_switch)
+        if lux_entity:
+            switches.append(lux_switch)
+        if irradiance_entity:
+            switches.append(irradiance_switch)
+
+    # Security switch: available whenever a presence entity is configured,
+    # regardless of whether climate mode is active.
+    if presence_entity:
+        switches.append(security_switch)
+
+    async_add_entities(switches)
+
+
+class AdaptiveCoverSwitch(
+    CoordinatorEntity[AdaptiveDataUpdateCoordinator], SwitchEntity, RestoreEntity
+):
+    """Representation of a adaptive cover switch."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        config_entry,
+        unique_id: str,
+        switch_name: str,
+        initial_state: bool,
+        key: str,
+        coordinator: AdaptiveDataUpdateCoordinator,
+        device_class: SwitchDeviceClass | None = None,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator=coordinator)
+        self.type = {
+            "cover_blind": "Vertical",
+            "cover_awning": "Horizontal",
+            "cover_tilt": "Tilt",
+        }
+        self._name = config_entry.data["name"]
+        self._state: bool | None = None
+        self._key = key
+        self._attr_translation_key = key
+        self._device_name = self.type[config_entry.data[CONF_SENSOR_TYPE]]
+        self._switch_name = switch_name
+        self._attr_device_class = device_class
+        self._initial_state = initial_state
+        self._attr_unique_id = f"{unique_id}_{switch_name}"
+        self._device_id = unique_id
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._device_id)},
+            name=self._device_name,
+        )
+
+        self.coordinator.logger.debug("Setup switch")
+
+    @property
+    def name(self):
+        """Name of the entity."""
+        return f"{self._switch_name} {self._name}"
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on."""
+        self.coordinator.logger.debug("Turning on")
+        self._attr_is_on = True
+        setattr(self.coordinator, self._key, True)
+        if self._key == "control_toggle" and kwargs.get("added") is not True:
+            for entity in self.coordinator.entities:
+                if (
+                    not self.coordinator.manager.is_cover_manual(entity)
+                    and self.coordinator.check_adaptive_time
+                ):
+                    await self.coordinator.async_set_position(
+                        entity, self.coordinator.state
+                    )
+        await self.coordinator.async_refresh()
+        self.schedule_update_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the device off."""
+        self.coordinator.logger.debug("Turning off")
+        self._attr_is_on = False
+        setattr(self.coordinator, self._key, False)
+        if self._key == "control_toggle" and kwargs.get("added") is not True:
+            for entity in self.coordinator.manager.manual_controlled:
+                self.coordinator.manager.reset(entity)
+        await self.coordinator.async_refresh()
+        self.schedule_update_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Call when entity about to be added to hass."""
+        await super().async_added_to_hass()
+
+        last_state = await self.async_get_last_state()
+        self.coordinator.logger.debug("%s: last state is %s", self._name, last_state)
+        if (last_state is None and self._initial_state) or (
+            last_state is not None and last_state.state == STATE_ON
+        ):
+            await self.async_turn_on(added=True)
+        else:
+            await self.async_turn_off(added=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# All-Blinds hub switch — Alexa "active / désactive les volets"
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class AdaptiveControlAllSwitch(SwitchEntity):
+    """ON/OFF switch on the "All Blinds" hub device.
+
+    Designed for Alexa voice control:
+      - "Alexa, active les volets"    → turn ON  → adaptive positioning enabled.
+      - "Alexa, désactive les volets" → turn OFF → adaptive positioning disabled.
+    """
+
+    _attr_has_entity_name = False
+    _attr_name = "Les volets"
+    _attr_should_poll = True
+    _attr_icon = "mdi:auto-mode"
+
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        """Bind to the hub config entry's device."""
+        self.hass = hass
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_adaptive_control_all"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            name="All Blinds",
+            manufacturer="Adaptive Cover",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """True when adaptive control is enabled on every regular entry."""
+        coords = list(iter_regular_coordinators(self.hass))
+        if not coords:
+            return False
+        return all(getattr(c, "control_toggle", False) for c in coords)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable adaptive control on every entry; clear manual overrides."""
+        LOGGER.debug("AdaptiveControlAllSwitch: turning ON")
+        for coord in iter_regular_coordinators(self.hass):
+            coord.control_toggle = True
+            manager = getattr(coord, "manager", None)
+            if manager is not None:
+                for entity_id in getattr(coord, "entities", None) or ():
+                    manager.reset(entity_id)
+            await coord.async_refresh()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable adaptive control on every entry."""
+        LOGGER.debug("AdaptiveControlAllSwitch: turning OFF")
+        for coord in iter_regular_coordinators(self.hass):
+            coord.control_toggle = False
+            await coord.async_refresh()
+        self.async_write_ha_state()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# All-Blinds hub security switch — activates security mode on all entries
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class AdaptiveSecurityAllSwitch(SwitchEntity):
+    """Security mode switch on the "All Blinds" hub device.
+
+    When turned ON, security mode is activated on every regular entry that
+    has a presence entity configured. Covers close when nobody is home.
+
+    ``is_on`` reflects an AND across all eligible entries (those with a
+    presence entity): reads True only when security is active on all of them.
+
+    Entries without a presence entity are ignored — security mode has no
+    effect without a presence sensor.
+    """
+
+    _attr_has_entity_name = False
+    _attr_name = "Sécurité volets"  # Alexa: "active / désactive la sécurité des volets"
+    _attr_should_poll = True
+    _attr_icon = "mdi:shield-home"
+
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        """Bind to the hub config entry's device."""
+        self.hass = hass
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_security_all"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            name="All Blinds",
+            manufacturer="Adaptive Cover",
+        )
+
+    def _eligible_coordinators(self):
+        """Yield coordinators that have a presence entity configured."""
+        for coord in iter_regular_coordinators(self.hass):
+            if coord.config_entry.options.get(CONF_PRESENCE_ENTITY):
+                yield coord
+
+    @property
+    def is_on(self) -> bool:
+        """True when security mode is enabled on every eligible entry."""
+        coords = list(self._eligible_coordinators())
+        if not coords:
+            return False
+        return all(getattr(c, "security_toggle", False) for c in coords)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable security mode on all entries with a presence entity."""
+        LOGGER.debug("AdaptiveSecurityAllSwitch: turning ON")
+        for coord in self._eligible_coordinators():
+            coord.security_toggle = True
+            await coord.async_refresh()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable security mode on all entries."""
+        LOGGER.debug("AdaptiveSecurityAllSwitch: turning OFF")
+        for coord in iter_regular_coordinators(self.hass):
+            coord.security_toggle = False
+            await coord.async_refresh()
+        self.async_write_ha_state()
