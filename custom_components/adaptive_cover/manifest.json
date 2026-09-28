@@ -2,7 +2,7 @@
   "domain": "adaptive_cover",
   "name": "Adaptive Cover",
   "codeowners": [
-    "@basbruss"
+    "@florianwolf100-ux"
   ],
   "config_flow": true,
   "dependencies": [
@@ -13,12 +13,12 @@
     "sensor",
     "weather"
   ],
-  "documentation": "https://github.com/basbruss/adaptive-cover",
+  "documentation": "https://github.com/florianwolf100-ux/New_Adaptiv_Cover",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/basbruss/adaptive-cover/issues",
+  "issue_tracker": "https://github.com/florianwolf100-ux/New_Adaptiv_Cover/issues",
   "requirements": [
     "astral",
     "pandas"
   ],
-  "version": "2.25.0"
+  "version": "2.25.1"
 }

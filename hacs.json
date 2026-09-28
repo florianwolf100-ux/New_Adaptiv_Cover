@@ -1,1 +1,4 @@
-{"name": "Adaptive Cover", "content_in_root": false, "render_readme": true, "filename": "adaptive_cover.zip"}
+{
+  "name": "Adaptive Cover",
+  "render_readme": true
+}

@@ -1,10 +1,10 @@
 🇫🇷 [Documentation en français](README.fr.md)
 
-![Version](https://img.shields.io/github/v/release/kamahat/adaptive-cover?style=for-the-badge)
+![Version](https://img.shields.io/github/v/release/florianwolf100-ux/New_Adaptiv_Cover?style=for-the-badge)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.05%2B-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white)
 
-![logo](https://github.com/basbruss/adaptive-cover/blob/main/images/logo.png#gh-light-mode-only)
-![logo](https://github.com/basbruss/adaptive-cover/blob/main/images/dark_logo.png#gh-dark-mode-only)
+![logo](https://raw.githubusercontent.com/florianwolf100-ux/New_Adaptiv_Cover/main/images/logo.png#gh-light-mode-only)
+![logo](https://raw.githubusercontent.com/florianwolf100-ux/New_Adaptiv_Cover/main/images/dark_logo.png#gh-dark-mode-only)
 
 # Adaptive Cover
 
@@ -85,7 +85,7 @@ This integration builds upon the template sensor from this forum post [Automatic
 
 ### HACS (Recommended)
 
-Add <https://github.com/kamahat/adaptive-cover> as custom repository to HACS.
+Add <https://github.com/florianwolf100-ux/New_Adaptiv_Cover> as custom repository to HACS.
 Search and download Adaptive Cover within HACS.
 
 Restart Home-Assistant and add the integration.
@@ -383,7 +383,7 @@ The **All Blinds** device (auto-created on first setup) exposes:
 | `scene.*_all_open` | **Blinds open** | Sets all covers to 100% |
 | `scene.*_all_closed` | **Blinds closed** | Sets all covers to 0% |
 
-![entities](https://github.com/basbruss/adaptive-cover/blob/main/images/entities.png)
+![entities](https://raw.githubusercontent.com/florianwolf100-ux/New_Adaptiv_Cover/main/images/entities.png)
 
 ## All Blinds hub device
 

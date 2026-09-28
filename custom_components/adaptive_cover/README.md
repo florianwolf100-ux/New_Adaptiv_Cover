@@ -252,7 +252,7 @@ flowchart TD
 ### HACS (recommended)
 
 1. In HACS → **Integrations → Custom repositories**
-2. Add `https://github.com/kamahat/adaptive-cover` (category: Integration)
+2. Add `https://github.com/florianwolf100-ux/New_Adaptiv_Cover` (category: Integration)
 3. Search for *Adaptive Cover* and install
 4. Restart Home Assistant
 
@@ -471,5 +471,5 @@ automation:
 
 - [Changelog](CHANGELOG.md)
 - [Operational Runbook (FR)](RUNBOOK.fr.md)
-- [Releases](https://github.com/kamahat/adaptive-cover/releases)
-- [Issues](https://github.com/kamahat/adaptive-cover/issues)
+- [Releases](https://github.com/florianwolf100-ux/New_Adaptiv_Cover/releases)
+- [Issues](https://github.com/florianwolf100-ux/New_Adaptiv_Cover/issues)
